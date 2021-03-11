@@ -7,47 +7,17 @@ import gym
 import time
 import spinup.algos.pytorch.td3.core as core
 from spinup.utils.logx import EpochLogger
-
-
-class ReplayBuffer:
-    """
-    A simple FIFO experience replay buffer for TD3 agents.
-    """
-
-    def __init__(self, obs_dim, act_dim, size):
-        self.obs_buf = np.zeros(core.combined_shape(size, obs_dim), dtype=np.float32)
-        self.obs2_buf = np.zeros(core.combined_shape(size, obs_dim), dtype=np.float32)
-        self.act_buf = np.zeros(core.combined_shape(size, act_dim), dtype=np.float32)
-        self.rew_buf = np.zeros(size, dtype=np.float32)
-        self.done_buf = np.zeros(size, dtype=np.float32)
-        self.ptr, self.size, self.max_size = 0, 0, size
-
-    def store(self, obs, act, rew, next_obs, done):
-        self.obs_buf[self.ptr] = obs
-        self.obs2_buf[self.ptr] = next_obs
-        self.act_buf[self.ptr] = act
-        self.rew_buf[self.ptr] = rew
-        self.done_buf[self.ptr] = done
-        self.ptr = (self.ptr+1) % self.max_size
-        self.size = min(self.size+1, self.max_size)
-
-    def sample_batch(self, batch_size=32):
-        idxs = np.random.randint(0, self.size, size=batch_size)
-        batch = dict(obs=self.obs_buf[idxs],
-                     obs2=self.obs2_buf[idxs],
-                     act=self.act_buf[idxs],
-                     rew=self.rew_buf[idxs],
-                     done=self.done_buf[idxs])
-        return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in batch.items()}
-
+import custompendulumenv
+from replay_buffers import ReplayBuffer, MultiStepReplayBuffer
 
 
 def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0, 
         steps_per_epoch=4000, epochs=100, replay_size=int(1e6), gamma=0.99, 
         polyak=0.995, pi_lr=1e-3, q_lr=1e-3, batch_size=100, start_steps=10000, 
         update_after=1000, update_every=50, act_noise=0.1, target_noise=0.2, 
-        noise_clip=0.5, policy_delay=2, num_test_episodes=10, max_ep_len=1000, 
-        logger_kwargs=dict(), save_freq=1):
+        noise_clip=0.5, policy_delay=2, num_test_episodes=100, max_ep_len=1000, 
+        logger_kwargs=dict(), save_freq=1, multistep_n=1, use_parameter_noise=False,
+        decay_exploration=False):
     """
     Twin Delayed Deep Deterministic Policy Gradient (TD3)
 
@@ -159,6 +129,9 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     # Action limit for clamping: critically, assumes all dimensions share the same bound!
     act_limit = env.action_space.high[0]
 
+    sigma = act_noise
+
+
     # Create actor-critic module and target networks
     ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
     ac_targ = deepcopy(ac)
@@ -171,7 +144,10 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     q_params = itertools.chain(ac.q1.parameters(), ac.q2.parameters())
 
     # Experience buffer
-    replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
+    if multistep_n > 1:
+        replay_buffer = MultiStepReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size, n=multistep_n, gamma=gamma)
+    else:
+        replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
 
     # Count variables (protip: try to get a feel for how different size networks behave!)
     var_counts = tuple(core.count_vars(module) for module in [ac.pi, ac.q1, ac.q2])
@@ -265,7 +241,12 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     def get_action(o, noise_scale):
         a = ac.act(torch.as_tensor(o, dtype=torch.float32))
-        a += noise_scale * np.random.randn(act_dim)
+        noise_dim = None if act_dim==1 else act_dim # Fixes a bug that occurs in case of 1-dimensional action spaces
+        a += noise_scale * np.random.standard_normal(noise_dim)
+        return np.clip(a, -act_limit, act_limit)
+
+    def get_action_from_perturbed_model(o, actor):
+        a = actor.act(torch.as_tensor(o, dtype=torch.float32))
         return np.clip(a, -act_limit, act_limit)
 
     def test_agent():
@@ -277,11 +258,37 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                 ep_ret += r
                 ep_len += 1
             logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
+        return ep_ret
+
+    def get_perturbed_model(sigma):
+        actor = deepcopy(ac)
+        with torch.no_grad():
+            for param in actor.pi.parameters():
+                param.add_(torch.randn(param.size()) * sigma)
+        return actor
+
+    def update_sigma(sigma, perturbed_actor, batch_size=128):
+        obs = replay_buffer.sample_batch(batch_size=batch_size)['obs']
+        with torch.no_grad():
+            ac1 = ac.pi(obs)
+            ac2 = perturbed_actor.pi(obs)
+            dist = torch.sqrt(torch.mean((ac1 - ac2)**2))
+        if dist < sigma:
+            sigma *= 1.01
+        else:
+            sigma /= 1.01
+        return sigma
+
 
     # Prepare for interaction with environment
+    best_test_ep_return = float('-inf')
     total_steps = steps_per_epoch * epochs
     start_time = time.time()
     o, ep_ret, ep_len = env.reset(), 0, 0
+
+
+    if use_parameter_noise:
+        perturbed_actor = get_perturbed_model(sigma)
 
     # Main loop: collect experience in env and update/log each epoch
     for t in range(total_steps):
@@ -290,7 +297,10 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         # from a uniform distribution for better exploration. Afterwards, 
         # use the learned policy (with some noise, via act_noise). 
         if t > start_steps:
-            a = get_action(o, act_noise)
+            if use_parameter_noise:
+                a = get_action_from_perturbed_model(o.squeeze(), perturbed_actor)
+            else:
+                a = get_action(o.squeeze(), act_noise)
         else:
             a = env.action_space.sample()
 
@@ -315,23 +325,40 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         if d or (ep_len == max_ep_len):
             logger.store(EpRet=ep_ret, EpLen=ep_len)
             o, ep_ret, ep_len = env.reset(), 0, 0
+            if use_parameter_noise:
+                sigma = update_sigma(sigma, perturbed_actor)
+                perturbed_actor = get_perturbed_model(sigma)
 
         # Update handling
         if t >= update_after and t % update_every == 0:
             for j in range(update_every):
                 batch = replay_buffer.sample_batch(batch_size)
                 update(data=batch, timer=j)
+                
+
 
         # End of epoch handling
         if (t+1) % steps_per_epoch == 0:
+
+             # Decay the action noise or sigma
+            if decay_exploration and (((t+1) % steps_per_epoch) == 0):
+                sigma /= 1.001
+                act_noise /= 1.001
+                
             epoch = (t+1) // steps_per_epoch
 
-            # Save model
-            if (epoch % save_freq == 0) or (epoch == epochs):
-                logger.save_state({'env': env}, None)
-
             # Test the performance of the deterministic version of the agent.
-            test_agent()
+            test_ep_return = test_agent()
+
+            # Save best model:
+            if test_ep_return > best_test_ep_return:
+                best_test_ep_return = test_ep_return
+                logger.save_state({'env': env}, 0) 
+
+            # Save latest model
+            if (epoch % save_freq == 0) or (epoch == epochs):
+                logger.save_state({'env': env}, 1)
+
 
             # Log info about epoch
             logger.log_tabular('Epoch', epoch)
@@ -350,19 +377,37 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='HalfCheetah-v2')
+    parser.add_argument('--env', type=str, default='Hockey-v0')
+    parser.add_argument('--mode', type=int, default=2)
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--exp_name', type=str, default='td3')
+    parser.add_argument('--n', type=int, default=1)
+    parser.add_argument('--psn', type=int, default=0) # Will be converted to boolean
+    parser.add_argument('--decay', type=int, default=0) # Will be converted to boolean
+    parser.add_argument('--layernorm', type=int, default=0) # Will be converted to boolean
     args = parser.parse_args()
 
     from spinup.utils.run_utils import setup_logger_kwargs
-    logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
+    if args.env == 'Hockey-v0':
+        import laserhockey
+        experiment_name = f"{args.env}m{args.mode}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
+        logger_kwargs = setup_logger_kwargs(experiment_name, args.seed)
 
-    td3(lambda : gym.make(args.env), actor_critic=core.MLPActorCritic,
-        ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), 
-        gamma=args.gamma, seed=args.seed, epochs=args.epochs,
-        logger_kwargs=logger_kwargs)
+        td3(lambda : gym.make(args.env, mode=args.mode), actor_critic=core.MLPActorCritic,
+            ac_kwargs=dict(hidden_sizes=[args.hid]*args.l, layernorm=args.layernorm), 
+            gamma=args.gamma, seed=args.seed, epochs=args.epochs,
+            logger_kwargs=logger_kwargs, multistep_n=args.n, use_parameter_noise=bool(args.psn),
+            decay_exploration=bool(args.decay))
+    else:
+        experiment_name = f"{args.env}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
+        logger_kwargs = setup_logger_kwargs(experiment_name, args.seed)
+ 
+        td3(lambda : gym.make(args.env), actor_critic=core.MLPActorCritic,
+            ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), 
+            gamma=args.gamma, seed=args.seed, epochs=args.epochs,
+            logger_kwargs=logger_kwargs, multistep_n=args.n, use_parameter_noise=bool(args.psn),
+            decay_exploration=bool(args.decay))

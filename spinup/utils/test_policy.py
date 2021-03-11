@@ -6,6 +6,8 @@ import tensorflow as tf
 import torch
 from spinup import EpochLogger
 from spinup.utils.logx import restore_tf_graph
+import laserhockey
+import custompendulumenv
 
 
 def load_policy_and_env(fpath, itr='last', deterministic=False):
