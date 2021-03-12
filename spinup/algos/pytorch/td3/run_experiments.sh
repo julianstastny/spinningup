@@ -1,5 +1,5 @@
 #!/bin/bash
-for i in 0 1
+for i in 1 3
 do
     for j in 0 1
     do
