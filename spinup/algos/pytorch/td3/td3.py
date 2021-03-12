@@ -8,6 +8,7 @@ import time
 import spinup.algos.pytorch.td3.core as core
 from spinup.utils.logx import EpochLogger
 import custompendulumenv
+import curriculum_env
 from replay_buffers import ReplayBuffer, MultiStepReplayBuffer
 
 
