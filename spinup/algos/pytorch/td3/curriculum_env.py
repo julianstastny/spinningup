@@ -6,12 +6,12 @@ import numpy as np
 
 class CurriculumEnv(HockeyEnv):
   
-  def __init__(self, mode=None):
-    self.opponent = BasicOpponent(weak=True)
+  def __init__(self, mode=None, weak_opponent=True):
+    self.opponent = BasicOpponent(weak=weak_opponent)
     self.episode = 0
     self.curriculum = {
         "defense+shooting": 1000, # Until episode 1000
-        "play vs weak": 2000 # Until episode 2000. After that, play vs strong
+        "weak opp": list(range(500)) + list(range(1000, 1500))
     }
     super().__init__(mode=1, keep_mode=True)
     # linear force in (x,y)-direction, torque, and shooting
@@ -20,20 +20,31 @@ class CurriculumEnv(HockeyEnv):
 
   def reset(self, one_starting=None):
     self.episode += 1
+    if self.episode in self.curriculum["weak opp"]:
+      self.opponent = BasicOpponent(weak=True)
+      stage = "w"
+    else:
+      self.opponent = BasicOpponent(weak=False)
+      stage = "s"
     if self.episode < self.curriculum["defense+shooting"]:
-        if self.episode % 2 == 0:
-            return super().reset(one_starting, mode=1)
-        return super().reset(mode=2)
-    elif self.episode > self.curriculum["play vs weak"]:
-        self.opponent = BasicOpponent(weak=False)
-    return super().reset(one_starting, mode=0)
-
+      stage += "DS"
+      if self.episode % 2 == 0:
+        obs = super().reset(one_starting, mode=1)
+      else: 
+        obs = super().reset(one_starting, mode=2)
+    else:
+      stage += "P"
+      obs = super().reset(one_starting, mode=0)
+    self.stage = stage
+    return obs
 
   def step(self, action):
     ob2 = self.obs_agent_two()
     a2 = self.opponent.act(ob2)
     action2 = np.hstack([action, a2])
-    return super().step(action2)
+    obs, reward, done, info = super().step(action2)
+    info["stage"] = self.stage
+    return obs, reward, done, info
 
 
 from gym.envs.registration import register

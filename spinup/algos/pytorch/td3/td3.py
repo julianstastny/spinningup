@@ -306,7 +306,7 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             a = env.action_space.sample()
 
         # Step the env
-        o2, r, d, _ = env.step(a)
+        o2, r, d, info = env.step(a)
         ep_ret += r
         ep_len += 1
 
@@ -373,12 +373,15 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             logger.log_tabular('LossPi', average_only=True)
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
+            if 'stage' in info.keys():
+                logger.log_tabular('CStage', info['stage'])
             logger.dump_tabular()
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, default='Hockey-One-v0')
+    parser.add_argument('--weak_opponent', type=int, default=1)
     parser.add_argument('--mode', type=int, default=2)
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2)
@@ -393,12 +396,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     from spinup.utils.run_utils import setup_logger_kwargs
-    if args.env == 'Hockey-v0':
+    if "Hockey" in args.env:
         import laserhockey
-        experiment_name = f"{args.env}m{args.mode}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
+        more_detailed = "Curriculum" if "Curriculum" in args.env else f"{args.env}m{args.mode}o{args.weak_opponent}"
+        experiment_name = f"{more_detailed}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
         logger_kwargs = setup_logger_kwargs(experiment_name, args.seed)
 
-        td3(lambda : gym.make(args.env, mode=args.mode), actor_critic=core.MLPActorCritic,
+        td3(lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent)), actor_critic=core.MLPActorCritic,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l, layernorm=args.layernorm), 
             gamma=args.gamma, seed=args.seed, epochs=args.epochs,
             logger_kwargs=logger_kwargs, multistep_n=args.n, use_parameter_noise=bool(args.psn),
