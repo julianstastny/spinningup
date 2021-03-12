@@ -378,7 +378,7 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='Hockey-v0')
+    parser.add_argument('--env', type=str, default='Hockey-One-v0')
     parser.add_argument('--mode', type=int, default=2)
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2)
