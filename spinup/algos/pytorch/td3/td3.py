@@ -7,9 +7,9 @@ import gym
 import time
 import spinup.algos.pytorch.td3.core as core
 from spinup.utils.logx import EpochLogger
-import custompendulumenv
-import curriculum_env
+# import custompendulumenv
 from replay_buffers import ReplayBuffer, MultiStepReplayBuffer
+import os
 
 
 def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0, 
@@ -252,7 +252,7 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     def test_agent():
         for j in range(num_test_episodes):
-            o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
+            o, d, ep_ret, ep_len = test_env.reset(opponent="strong"), False, 0, 0
             while not(d or (ep_len == max_ep_len)):
                 # Take deterministic actions at test time (noise_scale=0)
                 o, r, d, _ = test_env.step(get_action(o, 0))
@@ -378,6 +378,7 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             logger.dump_tabular()
 
 if __name__ == '__main__':
+
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, default='Hockey-One-v0')
@@ -392,17 +393,21 @@ if __name__ == '__main__':
     parser.add_argument('--n', type=int, default=1)
     parser.add_argument('--psn', type=int, default=0) # Will be converted to boolean
     parser.add_argument('--decay', type=int, default=0) # Will be converted to boolean
-    parser.add_argument('--layernorm', type=int, default=0) # Will be converted to boolean
+    parser.add_argument('--layernorm', type=int, default=1) # Will be converted to boolean
+    parser.add_argument('--data_path', type=str, default='/Users/julianstastny/Code/rl-course/Hockey-project/spinningup/data')
     args = parser.parse_args()
 
     from spinup.utils.run_utils import setup_logger_kwargs
     if "Hockey" in args.env:
         import laserhockey
+        import curriculum_env
         more_detailed = "Curr" if "Curriculum" in args.env else f"{args.env}m{args.mode}o{args.weak_opponent}"
         experiment_name = f"{args.exp_name}_{more_detailed}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
         logger_kwargs = setup_logger_kwargs(experiment_name, args.seed)
+        self_play_path = os.path.join(args.data_path, experiment_name, experiment_name + '_s' + str(args.seed), "pyt_save/model0.pt")
+        print(self_play_path)
 
-        td3(lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent)), actor_critic=core.MLPActorCritic,
+        td3(lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent), self_play_path=self_play_path), actor_critic=core.MLPActorCritic,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l, layernorm=args.layernorm), 
             gamma=args.gamma, seed=args.seed, epochs=args.epochs,
             logger_kwargs=logger_kwargs, multistep_n=args.n, use_parameter_noise=bool(args.psn),
