@@ -18,7 +18,7 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         update_after=1000, update_every=50, act_noise=0.1, target_noise=0.2, 
         noise_clip=0.5, policy_delay=2, num_test_episodes=100, max_ep_len=1000, 
         logger_kwargs=dict(), save_freq=1, multistep_n=1, use_parameter_noise=False,
-        decay_exploration=False):
+        decay_exploration=False, save_k_latest=1):
     """
     Twin Delayed Deep Deterministic Policy Gradient (TD3)
 
@@ -286,6 +286,7 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     total_steps = steps_per_epoch * epochs
     start_time = time.time()
     o, ep_ret, ep_len = env.reset(), 0, 0
+    save_id = 0
 
 
     if use_parameter_noise:
@@ -358,7 +359,8 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 
             # Save latest model
             if (epoch % save_freq == 0) or (epoch == epochs):
-                logger.save_state({'env': env}, 1)
+                save_id += 1
+                logger.save_state({'env': env}, (save_id % save_k_latest) + 1)
 
 
             # Log info about epoch
@@ -395,6 +397,7 @@ if __name__ == '__main__':
     parser.add_argument('--decay', type=int, default=0) # Will be converted to boolean
     parser.add_argument('--layernorm', type=int, default=1) # Will be converted to boolean
     parser.add_argument('--data_path', type=str, default='/Users/julianstastny/Code/rl-course/Hockey-project/spinningup/data')
+    parser.add_argument('--save_k_latest', type=int, default=1)
     args = parser.parse_args()
 
     from spinup.utils.run_utils import setup_logger_kwargs
@@ -407,11 +410,11 @@ if __name__ == '__main__':
         self_play_path = os.path.join(args.data_path, experiment_name, experiment_name + '_s' + str(args.seed), "pyt_save/model0.pt")
         print(self_play_path)
 
-        td3(lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent), self_play_path=self_play_path), actor_critic=core.MLPActorCritic,
+        td3(lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent), self_play_path=self_play_path, num_saved_models=args.save_k_latest-1), actor_critic=core.MLPActorCritic,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l, layernorm=args.layernorm), 
             gamma=args.gamma, seed=args.seed, epochs=args.epochs,
             logger_kwargs=logger_kwargs, multistep_n=args.n, use_parameter_noise=bool(args.psn),
-            decay_exploration=bool(args.decay))
+            decay_exploration=bool(args.decay), save_k_latest=args.save_k_latest)
     else:
         experiment_name = f"{args.env}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
         logger_kwargs = setup_logger_kwargs(experiment_name, args.seed)
