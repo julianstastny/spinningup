@@ -16,7 +16,7 @@ class CurriculumEnv(HockeyEnv):
         "shooting": 0,
         "defense+shooting": 2000, # Until episode 1000
         "weak opp": [], #list(range(1000))
-        "self-play": 12000
+        "self-play": 6000
     }
     super().__init__(mode=1, keep_mode=True)
     # linear force in (x,y)-direction, torque, and shooting
