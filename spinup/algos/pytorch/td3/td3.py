@@ -7,7 +7,7 @@ import gym
 import time
 import spinup.algos.pytorch.td3.core as core
 from spinup.utils.logx import EpochLogger
-# import custompendulumenv
+import custompendulumenv
 from replay_buffers import ReplayBuffer, MultiStepReplayBuffer
 import os
 
