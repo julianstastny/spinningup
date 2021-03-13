@@ -358,9 +358,9 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                 logger.save_state({'env': env}, 0) 
 
             # Save latest model
-            if (epoch % save_freq == 0) or (epoch == epochs):
-                save_id += 1
-                logger.save_state({'env': env}, (save_id % save_k_latest) + 1)
+            # if (epoch % save_freq == 0) or (epoch == epochs):
+            save_id += 1
+            logger.save_state({'env': env}, (save_id % save_k_latest) + 1)
 
 
             # Log info about epoch
