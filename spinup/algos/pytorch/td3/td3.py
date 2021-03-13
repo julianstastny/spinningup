@@ -252,7 +252,11 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     def test_agent():
         for j in range(num_test_episodes):
-            o, d, ep_ret, ep_len = test_env.reset(opponent="strong"), False, 0, 0
+            if type(env).__class__.__name__ == 'CurriculumEnv':
+                o, d, ep_ret, ep_len = test_env.reset(opponent="strong"), False, 0, 0
+            else:
+                o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
+ 
             while not(d or (ep_len == max_ep_len)):
                 # Take deterministic actions at test time (noise_scale=0)
                 o, r, d, _ = test_env.step(get_action(o, 0))
