@@ -388,7 +388,7 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--exp_name', type=str, default='td3')
+    parser.add_argument('--exp_name', type=str, default='')
     parser.add_argument('--n', type=int, default=1)
     parser.add_argument('--psn', type=int, default=0) # Will be converted to boolean
     parser.add_argument('--decay', type=int, default=0) # Will be converted to boolean
@@ -398,8 +398,8 @@ if __name__ == '__main__':
     from spinup.utils.run_utils import setup_logger_kwargs
     if "Hockey" in args.env:
         import laserhockey
-        more_detailed = "Curriculum" if "Curriculum" in args.env else f"{args.env}m{args.mode}o{args.weak_opponent}"
-        experiment_name = f"{more_detailed}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
+        more_detailed = "Curr" if "Curriculum" in args.env else f"{args.env}m{args.mode}o{args.weak_opponent}"
+        experiment_name = f"{args.exp_name}_{more_detailed}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
         logger_kwargs = setup_logger_kwargs(experiment_name, args.seed)
 
         td3(lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent)), actor_critic=core.MLPActorCritic,
