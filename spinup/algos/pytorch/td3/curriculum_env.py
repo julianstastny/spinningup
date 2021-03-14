@@ -26,7 +26,7 @@ class CurriculumEnv(HockeyEnv):
     assert not (self_play_path is None) and self.curriculum["self-play"]
 
 
-  def reset(self, one_starting=None, opponent="default"):
+  def reset(self, one_starting=None, opponent="default", mode="default"):
     self.episode += 1
 
     # First, set the strength of the opponent.
@@ -46,13 +46,13 @@ class CurriculumEnv(HockeyEnv):
       stage = "sp"
 
     # Second, decide which mode to play in.
-    if self.episode < self.curriculum["defense"]:
+    if (self.episode < self.curriculum["defense"]) or (mode==2):
       stage += "D"
       obs = super().reset(one_starting, mode=2) 
-    elif self.episode < self.curriculum["shooting"]:
+    elif (self.episode < self.curriculum["shooting"]) or (mode==1):
       stage += "S"
       obs = super().reset(one_starting, mode=1) 
-    elif self.episode < self.curriculum["defense+shooting"]:
+    elif (self.episode < self.curriculum["defense+shooting"]) and (mode=="default"):
       stage += "DS"
       if self.episode % 2 == 0:
         obs = super().reset(one_starting, mode=1)

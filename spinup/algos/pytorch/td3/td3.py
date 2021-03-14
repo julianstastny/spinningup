@@ -253,7 +253,7 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     def test_agent():
         for j in range(num_test_episodes):
             if type(env).__class__.__name__ == 'CurriculumEnv':
-                o, d, ep_ret, ep_len = test_env.reset(opponent="strong"), False, 0, 0
+                o, d, ep_ret, ep_len = test_env.reset(opponent="strong", mode=0), False, 0, 0
             else:
                 o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
  
@@ -423,7 +423,7 @@ if __name__ == '__main__':
             logger_kwargs=logger_kwargs, multistep_n=args.n, use_parameter_noise=bool(args.psn),
             decay_exploration=bool(args.decay), save_k_latest=args.save_k_latest)
     else:
-        experiment_name = f"{args.env}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
+        experiment_name = f"{args.exp_name}_{args.env}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
         logger_kwargs = setup_logger_kwargs(experiment_name, args.seed)
  
         td3(lambda : gym.make(args.env), actor_critic=core.MLPActorCritic,
