@@ -272,13 +272,13 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                 param.add_(torch.randn(param.size()) * sigma)
         return actor
 
-    def update_sigma(sigma, perturbed_actor, batch_size=128):
+    def update_sigma(target_noise, sigma, perturbed_actor, batch_size=128):
         obs = replay_buffer.sample_batch(batch_size=batch_size)['obs']
         with torch.no_grad():
             ac1 = ac.pi(obs)
             ac2 = perturbed_actor.pi(obs)
             dist = torch.sqrt(torch.mean((ac1 - ac2)**2))
-        if dist < sigma:
+        if dist < target_noise:
             sigma *= 1.01
         else:
             sigma /= 1.01
@@ -332,7 +332,7 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             logger.store(EpRet=ep_ret, EpLen=ep_len)
             o, ep_ret, ep_len = env.reset(), 0, 0
             if use_parameter_noise:
-                sigma = update_sigma(sigma, perturbed_actor)
+                sigma = update_sigma(act_noise, sigma, perturbed_actor)
                 perturbed_actor = get_perturbed_model(sigma)
 
         # Update handling
