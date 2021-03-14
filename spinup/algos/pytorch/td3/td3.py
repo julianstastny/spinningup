@@ -416,7 +416,7 @@ if __name__ == '__main__':
         self_play_path = os.path.join(args.data_path, experiment_name, experiment_name + '_s' + str(args.seed), "pyt_save/model0.pt")
         print(self_play_path)
 
-        td3(lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent), self_play_path=self_play_path, num_saved_models=args.save_k_latest-1), actor_critic=core.MLPActorCritic,
+        td3(lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent), self_play_path=self_play_path, num_saved_models=args.save_k_latest), actor_critic=core.MLPActorCritic,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l, layernorm=args.layernorm), 
             gamma=args.gamma, seed=args.seed, epochs=args.epochs,
             logger_kwargs=logger_kwargs, multistep_n=args.n, use_parameter_noise=bool(args.psn),

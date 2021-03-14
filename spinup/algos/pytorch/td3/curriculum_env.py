@@ -8,7 +8,7 @@ import random
 
 class CurriculumEnv(HockeyEnv):
   
-  def __init__(self, mode=None, weak_opponent=True, self_play_path=None, num_saved_models=0):
+  def __init__(self, mode=None, weak_opponent=True, self_play_path=None, num_saved_models=1):
     self.opponent = BasicOpponent(weak=weak_opponent)
     self.episode = 0
     self.curriculum = {
@@ -39,7 +39,7 @@ class CurriculumEnv(HockeyEnv):
       self.opponent_act = lambda obs: self.opponent.act(obs)
       stage = "sb"
     else:
-      which_model = random.randint(0, self.num_saved_models)
+      which_model = random.randint(1, self.num_saved_models)
       self.self_play_path = self.self_play_path[:-4] + str(which_model) + ".pt"
       self.opponent_model = torch.load(self.self_play_path)
       self.opponent_act = lambda obs: self.opponent_model.act(torch.as_tensor(obs, dtype=torch.float32))
