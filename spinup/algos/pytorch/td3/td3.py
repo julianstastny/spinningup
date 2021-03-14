@@ -379,6 +379,8 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             logger.log_tabular('LossPi', average_only=True)
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
+            if use_parameter_noise:
+                logger.log_tabular('sigma', sigma)
             if 'stage' in info.keys():
                 logger.log_tabular('CStage', info['stage'])
             logger.dump_tabular()
