@@ -41,7 +41,12 @@ class CurriculumEnv(HockeyEnv):
     else:
       which_model = random.randint(1, self.num_saved_models)
       self.self_play_path = self.self_play_path[:-4] + str(which_model) + ".pt"
-      self.opponent_model = torch.load(self.self_play_path)
+      try:
+        self.opponent_model = torch.load(self.self_play_path)
+      except: # In case we haven't gotten as far wrt saving models
+        self.self_play_path = self.self_play_path[:-4] + str(1) + ".pt"
+        self.opponent_model = torch.load(self.self_play_path)
+ 
       self.opponent_act = lambda obs: self.opponent_model.act(torch.as_tensor(obs, dtype=torch.float32))
       stage = "sp"
 
