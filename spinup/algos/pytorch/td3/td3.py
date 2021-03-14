@@ -272,10 +272,10 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                 param.add_(torch.randn(param.size()) * sigma)
         return actor
 
-    def update_sigma(target_noise, sigma, perturbed_actor, batch_size=128):
+    def update_sigma(target_noise, sigma, actor, perturbed_actor, batch_size=128):
         obs = replay_buffer.sample_batch(batch_size=batch_size)['obs']
         with torch.no_grad():
-            ac1 = ac.pi(obs)
+            ac1 = actor.pi(obs)
             ac2 = perturbed_actor.pi(obs)
             dist = torch.sqrt(torch.mean((ac1 - ac2)**2))
         if dist < target_noise:
@@ -331,16 +331,17 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         if d or (ep_len == max_ep_len):
             logger.store(EpRet=ep_ret, EpLen=ep_len)
             o, ep_ret, ep_len = env.reset(), 0, 0
-            if use_parameter_noise:
-                sigma = update_sigma(act_noise, sigma, perturbed_actor)
-                perturbed_actor = get_perturbed_model(sigma)
+
 
         # Update handling
         if t >= update_after and t % update_every == 0:
             for j in range(update_every):
                 batch = replay_buffer.sample_batch(batch_size)
                 update(data=batch, timer=j)
-                
+                if use_parameter_noise:
+                    perturbed_actor = get_perturbed_model(sigma) # To make sure that perturbed actor is based on the same actor that we are testing against
+                    sigma = update_sigma(act_noise, sigma, ac, perturbed_actor)
+                    perturbed_actor = get_perturbed_model(sigma)
 
 
         # End of epoch handling
