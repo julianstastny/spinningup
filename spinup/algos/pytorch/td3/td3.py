@@ -405,6 +405,7 @@ if __name__ == '__main__':
     parser.add_argument('--layernorm', type=int, default=1) # Will be converted to boolean
     parser.add_argument('--data_path', type=str, default='/Users/julianstastny/Code/rl-course/Hockey-project/spinningup/data')
     parser.add_argument('--save_k_latest', type=int, default=1)
+    parser.add_argument('--self_play', type=int, default=1)
     args = parser.parse_args()
 
     from spinup.utils.run_utils import setup_logger_kwargs
@@ -414,10 +415,19 @@ if __name__ == '__main__':
         more_detailed = "Curr" if "Curriculum" in args.env else f"{args.env}m{args.mode}o{args.weak_opponent}"
         experiment_name = f"{args.exp_name}_{more_detailed}_{args.l}x{args.hid}_psn{args.psn}_decay{args.decay}_nstep{args.n}_ln{args.layernorm}"
         logger_kwargs = setup_logger_kwargs(experiment_name, args.seed)
-        self_play_path = os.path.join(args.data_path, experiment_name, experiment_name + '_s' + str(args.seed), "pyt_save/model0.pt")
-        print(self_play_path)
+        if args.self_play:
+            self_play_path = os.path.join(args.data_path, experiment_name, experiment_name + '_s' + str(args.seed), "pyt_save/model0.pt")
+            print(self_play_path)
+        else:
+            self_play_path = None
+            print("Curriculum without self-play")
+        
+        if "Curriculum" in args.env:
+            env_init = lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent), self_play_path=self_play_path, num_saved_models=args.save_k_latest)
+        else:
+            env_init = lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent)) 
 
-        td3(lambda : gym.make(args.env, mode=args.mode, weak_opponent=bool(args.weak_opponent), self_play_path=self_play_path, num_saved_models=args.save_k_latest), actor_critic=core.MLPActorCritic,
+        td3(env_init, actor_critic=core.MLPActorCritic,
             ac_kwargs=dict(hidden_sizes=[args.hid]*args.l, layernorm=args.layernorm), 
             gamma=args.gamma, seed=args.seed, epochs=args.epochs,
             logger_kwargs=logger_kwargs, multistep_n=args.n, use_parameter_noise=bool(args.psn),
