@@ -9,21 +9,30 @@ import random
 class CurriculumEnv(HockeyEnv):
   
   def __init__(self, mode=None, weak_opponent=True, self_play_path=None, num_saved_models=1):
+    self.num_saved_models = num_saved_models
+    self.self_play_path = self_play_path
     self.opponent = BasicOpponent(weak=weak_opponent)
     self.episode = 0
-    self.curriculum = {
-        "defense": 0,
-        "shooting": 0,
-        "defense+shooting": 2000, # Until episode 1000
-        "weak opp": [], #list(range(1000))
-        "self-play": 6000
-    }
+    if self_play_path is not None:
+      self.curriculum = {
+          "defense": 0,
+          "shooting": 0,
+          "defense+shooting": 2000, # Until episode 2000
+          "weak opp": list(range(1000)),
+          "self-play": 6000
+      }
+    else:
+      self.curriculum = {
+          "defense": 0,
+          "shooting": 0,
+          "defense+shooting": 2000, # Until episode 2000
+          "weak opp": list(range(1000)),
+          "self-play": 1000000
+      } 
     super().__init__(mode=1, keep_mode=True)
     # linear force in (x,y)-direction, torque, and shooting
     self.action_space = spaces.Box(-1, +1, (4,), dtype=np.float32)
-    self.self_play_path = self_play_path
-    self.num_saved_models = num_saved_models
-    assert not (self_play_path is None) and self.curriculum["self-play"]
+    # assert not (self_play_path is None) and self.curriculum["self-play"]
 
 
   def reset(self, one_starting=None, opponent="default", mode="default"):
