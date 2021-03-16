@@ -175,7 +175,7 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             q1_pi_targ = ac_targ.q1(o2, a2)
             q2_pi_targ = ac_targ.q2(o2, a2)
             q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
-            backup = r + gamma * (1 - d) * q_pi_targ
+            backup = r + gamma**(multistep_n) * (1 - d) * q_pi_targ
 
         # MSE loss against Bellman backup
         loss_q1 = ((q1 - backup)**2).mean()

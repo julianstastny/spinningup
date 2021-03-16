@@ -10,11 +10,11 @@ def combined_shape(length, shape=None):
     return (length, shape) if np.isscalar(shape) else (length, *shape)
 
 def calculate_nstep_returns(rewards, n, gamma):
-    returns = np.array(rewards)
-    reward = np.copy(returns)
+    returns = np.array(rewards).astype(np.float64)
+    reward = np.copy(returns).astype(np.float64)
     for _ in range(n - 1):
         reward = np.roll(reward, -1, 0)
-        reward[-1] = 0
+        reward[-1] = 0.0
         reward *= gamma
         returns += reward
     return returns
@@ -28,7 +28,6 @@ class MultiStepIntermediateBuffer:
     def reset(self):
         assert self._ready_to_reset
         self.obs_buf = []
-        self.obs2_buf = []
         self.act_buf = []
         self.rew_buf = []
         self.done_buf = []
@@ -39,7 +38,6 @@ class MultiStepIntermediateBuffer:
             self.reset()
             self._ready_to_reset = False
         self.obs_buf.append(obs)
-        self.obs2_buf.append(next_obs)
         self.act_buf.append(act)
         self.rew_buf.append(rew)
         self.done_buf.append(done)
@@ -51,7 +49,7 @@ class MultiStepIntermediateBuffer:
     def get_trajectory(self):
         assert self._full
         self._ready_to_reset = True
-        return self.obs_buf, self.obs2_buf, self.act_buf, self.n_step_returns, self.done_buf
+        return self.obs_buf, self.act_buf, self.n_step_returns, self.done_buf
 
         
 class ReplayBuffer:
@@ -94,16 +92,21 @@ class MultiStepReplayBuffer(ReplayBuffer):
     def __init__(self, obs_dim, act_dim, size, n, gamma):
         super().__init__(obs_dim, act_dim, size)
         self.intermediate_buffer = MultiStepIntermediateBuffer(n, gamma)
+        self.n = n
 
     def store(self, obs, act, rew, next_obs, done):
         intermediate_is_full = self.intermediate_buffer.store(obs, act, rew, next_obs, done)
         if intermediate_is_full:
-            obss, obs2s, acts, n_step_returns, dones = self.intermediate_buffer.get_trajectory()
-            for obs, next_obs, act, n_step_return, done in zip(obss, obs2s, acts, n_step_returns, dones):
+            obss, acts, n_step_returns, dones = self.intermediate_buffer.get_trajectory()
+            for i, (obs, act, n_step_return, done) in enumerate(zip(obss, acts, n_step_returns, dones)):
                 self.obs_buf[self.ptr] = obs.squeeze()
-                self.obs2_buf[self.ptr] = next_obs.squeeze()
                 self.act_buf[self.ptr] = act
                 self.rew_buf[self.ptr] = n_step_return
-                self.done_buf[self.ptr] = done
+                if i + self.n < len(obss):
+                    self.obs2_buf[self.ptr] = obss[i + self.n].squeeze()
+                    self.done_buf[self.ptr] = dones[i + self.n]
+                else:
+                    self.obs2_buf[self.ptr] = obs.squeeze() # Wrong but doesn't matter because multiplied by 0 anyway
+                    self.done_buf[self.ptr] = True
                 self.ptr = (self.ptr+1) % self.max_size
                 self.size = min(self.size+1, self.max_size)
